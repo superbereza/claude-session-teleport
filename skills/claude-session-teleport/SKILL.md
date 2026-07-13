@@ -1,6 +1,6 @@
 ---
 name: claude-session-teleport
-description: Use when the user wants to continue a Claude Code chat session on a different machine — "continue this chat on the server", "перенеси сессию на сервер", "продолжим на маке", "teleport this session", "session handoff". Optionally also transfers the project(s) the chat is about. CLI: claude-teleport (preflight / config-delta / copy / rsync) — run preflight first (on the source) so uncommitted/gitignored files aren't silently left behind, then copy the chat and (optionally) the projects.
+description: Use when the user wants to continue a Claude Code chat session on a different machine — "continue this chat on the server", "перенеси сессию на сервер", "продолжим на маке", "teleport this session", "session handoff". Optionally also transfers the project(s) the chat is about. The claude-teleport CLI (preflight / config-delta / copy / rsync) does the work — run preflight first (on the source) so uncommitted/gitignored files aren't silently left behind, then copy the chat and (optionally) the projects.
 ---
 
 # claude-session-teleport
