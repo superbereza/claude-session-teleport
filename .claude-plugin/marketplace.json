@@ -1,0 +1,15 @@
+{
+  "name": "claude-session-teleport",
+  "description": "Self-marketplace for the claude-session-teleport plugin (move live Claude Code sessions between machines)",
+  "owner": {
+    "name": "superbereza"
+  },
+  "plugins": [
+    {
+      "name": "claude-session-teleport",
+      "description": "Move a live Claude Code chat session between machines — CLI + skill",
+      "version": "1.0.0",
+      "source": "./"
+    }
+  ]
+}

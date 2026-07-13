@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# claude-teleport — move a live Claude Code session (and optionally its project)
+# between machines. Dispatcher over the lib/ scripts.
+set -euo pipefail
+
+# Resolve our real location even when invoked via a PATH symlink.
+SELF=$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${BASH_SOURCE[0]}")
+ROOT=$(cd "$(dirname "$SELF")/.." && pwd)
+
+usage() {
+  cat <<'EOF'
+claude-teleport — move a live Claude Code session between machines
+
+Usage:
+  claude-teleport preflight <project-dir> [...]      # run FIRST, on the source
+  claude-teleport config-delta <target-alias>        # ~/.claude config diff vs target
+  claude-teleport copy <uuid> <target-alias> [opts]  # copy the chat (+ --auto-spawn)
+  claude-teleport rsync <src> <dst> [opts]           # move a project dir (size-gated)
+  claude-teleport help
+
+Run `claude-teleport <subcommand> --help` for subcommand options.
+Full playbook: the claude-session-teleport skill (SKILL.md).
+EOF
+}
+
+cmd="${1:-help}"
+shift || true
+case "$cmd" in
+  preflight)     exec bash "$ROOT/lib/preflight.sh" "$@" ;;
+  config-delta)  exec bash "$ROOT/lib/config-delta.sh" "$@" ;;
+  copy)          exec bash "$ROOT/lib/session-copy.sh" "$@" ;;
+  rsync)         exec bash "$ROOT/lib/rsync-project.sh" "$@" ;;
+  help|-h|--help) usage ;;
+  *) echo "claude-teleport: unknown subcommand '$cmd'" >&2; usage >&2; exit 2 ;;
+esac
