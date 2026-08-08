@@ -8,7 +8,7 @@
     {
       "name": "claude-session-teleport",
       "description": "Move a live Claude Code chat session between machines — CLI + skill",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "source": "./"
     }
   ]

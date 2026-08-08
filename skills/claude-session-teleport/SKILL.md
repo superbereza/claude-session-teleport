@@ -203,11 +203,11 @@ Use when: deliberate one-way move. **Plan to stop using the source.**
 
    > **`--target-cwd` also *relocates* the session** — it lands under whatever cwd you
    > pass, not just a rebased home. So it's the "move this chat to a different directory"
-   > knob (works with a real target host, or `localhost` for pure local file-ops). For a
-   > **same-machine** dir move you can instead use `claude-keep migrate <session> <cwd>`
-   > (claude-session-keeper), which also repoints its registry. Both rest on the same fact:
-   > a session = its `<uuid>.jsonl` + a cwd, and `--resume` follows the cwd — see the
-   > **"Session migration (canonical)"** section in the claude-session-keeper SKILL.
+   > knob, and it works with a real target host **or `localhost`** (pure local file-ops —
+   > moving a session between directories on the *same* machine). This works because a
+   > session is just its `<uuid>.jsonl` transcript plus a cwd, and `claude --resume` looks
+   > for that jsonl in the **current cwd's** project dir — so placing the jsonl under a new
+   > cwd's project dir and resuming from there continues the same chat elsewhere.
 
 5. **(Optional) Auto-spawn the resumed session in tmux:**
    With `--auto-spawn`, the skill opens a detached `tmux` session on the

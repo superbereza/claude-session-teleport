@@ -1,7 +1,7 @@
 {
   "name": "claude-session-teleport",
   "description": "Move a live Claude Code chat session between machines — preflight the project, copy & rebase the JSONL (clone or migrate), respawn in tmux with Remote Control and a handoff briefing. Skill + CLI (claude-teleport).",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": {
     "name": "superbereza"
   },
