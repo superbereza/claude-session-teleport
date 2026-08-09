@@ -2,7 +2,7 @@
   "name": "claude-session-teleport",
   "displayName": "Claude Session Teleport",
   "description": "Move a live Claude Code chat session between machines — clone or migrate, respawn in tmux with Remote Control and a handoff briefing.",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "author": {
     "name": "superbereza"
   },

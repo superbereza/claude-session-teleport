@@ -29,6 +29,12 @@
 #                  Default = $CLAUDE_EFFORT of the session running this skill
 #                  (effort is not stored per-dialog in the JSONL, so the live
 #                  session's effort is the best available signal).
+#   --allow-worktree: override the git-worktree guard (see below). By default a
+#                  session that is inside a Claude Code git worktree is REFUSED
+#                  for relocation, because --resume replays its EnterWorktree
+#                  state and re-enters a `.claude/worktrees/…` path that won't
+#                  exist at the destination. Exit the worktree first
+#                  (`claude-teleport exit-worktree <uuid>`) or force with this.
 #
 # Special target:
 #   "localhost"  — treat as a same-machine copy (no SSH). Useful for
@@ -69,6 +75,7 @@ BRIEFING=1               # type a handoff briefing into the resumed session
 NOTE=""                  # extra transfer-specific text appended to the briefing
 MODEL=""                 # model for resumed session; default = last model in source JSONL
 EFFORT=""                # effort level; default = live $CLAUDE_EFFORT of this session
+ALLOW_WORKTREE=0         # override the git-worktree relocation guard (see below)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -86,6 +93,7 @@ while [[ $# -gt 0 ]]; do
     --remote-name)         REMOTE_NAME="${2:-}"; shift 2 ;;
     --model)               MODEL="${2:-}"; shift 2 ;;
     --effort)              EFFORT="${2:-}"; shift 2 ;;
+    --allow-worktree)      ALLOW_WORKTREE=1; shift ;;
     -h|--help)            sed -n '/^# session-copy/,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)                   die "Unknown flag: $1" ;;
     *)
@@ -192,6 +200,82 @@ fi
 if [[ -n "$RESOLVED_CWD" && "$RESOLVED_CWD" != "$TARGET_CWD" ]]; then
   warn "target cwd is behind a symlink — using the resolved path: $RESOLVED_CWD"
   TARGET_CWD="$RESOLVED_CWD"
+fi
+
+# ── Guard: a session INSIDE a git worktree can't be cleanly relocated ─────────
+# Claude Code records worktree state in the transcript (EnterWorktree events) AND in
+# ~/.claude.json (projects[*].activeWorktreeSession, keyed by sessionId). On --resume it
+# REPLAYS that state and re-chdir's into the worktree, OVERRIDING the launch/target cwd — so a
+# relocated session lands back in a `.claude/worktrees/…` path that isn't valid at the
+# destination and breaks. External file surgery can't undo it (resume re-creates the binding);
+# the ONLY clean exit is ExitWorktree from INSIDE the live session (see `exit-worktree`).
+# Detection = the session's CURRENT cwd being under `.claude/worktrees/` (live /proc, else the
+# transcript's last cwd); claude.json's activeWorktreeSession is used only to enrich the message.
+worktree_for_uuid() {   # echoes "name<TAB>path<TAB>originalCwd" from claude.json (may be stale/empty)
+  python3 - "$1" <<'PYEOF'
+import json, os, sys
+uuid = sys.argv[1]
+try: d = json.load(open(os.path.expanduser("~/.claude.json")))
+except Exception: raise SystemExit(0)
+for proj in (d.get("projects") or {}).values():
+    aws = proj.get("activeWorktreeSession") if isinstance(proj, dict) else None
+    if isinstance(aws, dict) and aws.get("sessionId") == uuid:
+        print("\t".join([aws.get("worktreeName") or "", aws.get("worktreePath") or "", aws.get("originalCwd") or ""]))
+        break
+PYEOF
+}
+
+# Authoritative "is it in a worktree NOW": the live process cwd (/proc) if running, else the
+# transcript's last cwd. NB ~/.claude.json's activeWorktreeSession can be STALE (it is NOT cleared
+# on ExitWorktree — verified), so it is used ONLY to enrich the message, never as the detector.
+# (Edge case not covered: a session sitting at the repo root with an unmatched EnterWorktree still
+# pending — rare; the common "session is in the worktree dir" case is what this catches.)
+live_pid_cwd() {
+  python3 - "$1" <<'PYEOF'
+import json, os, glob, sys
+uuid = sys.argv[1]
+for f in glob.glob(os.path.expanduser("~/.claude/sessions/*.json")):
+    try: d = json.load(open(f))
+    except Exception: continue
+    if d.get("sessionId") == uuid:
+        try: print(os.readlink(f"/proc/{d.get('pid')}/cwd"))   # Linux; empty elsewhere → caller falls back
+        except Exception: pass
+        break
+PYEOF
+}
+CUR_CWD=$(live_pid_cwd "$UUID"); [[ -z "$CUR_CWD" ]] && CUR_CWD="$SOURCE_CWD"
+if [[ "$CUR_CWD" == */.claude/worktrees/* ]]; then
+  WT_PATH="$CUR_CWD"
+  _wt=$(worktree_for_uuid "$UUID")     # best-effort enrichment (name + origin); may be empty/stale
+  WT_NAME=${_wt%%$'\t'*}; _wtr=${_wt#*$'\t'}; WT_ORIG=${_wtr#*$'\t'}
+  # Same machine + unchanged cwd (worktree → itself): the worktree stays valid, nothing to guard.
+  if [[ "$TARGET" == "localhost" && "$TARGET_CWD" == "$CUR_CWD" ]]; then
+    :
+  else
+    step "Worktree guard"
+    warn "session is inside a git worktree${WT_NAME:+ '$WT_NAME'}:"
+    echo "    $WT_PATH"
+    echo "  On --resume Claude REPLAYS EnterWorktree and re-enters this path, overriding the target"
+    echo "  cwd — relocating would land the resumed session in a worktree invalid at the destination."
+
+    # C — "already home": the target IS the worktree's own origin on THIS machine, so the whole
+    # "move" is really just leaving the worktree. No transcript copy needed — point at the helper.
+    if [[ "$TARGET" == "localhost" && -n "$WT_ORIG" && "$TARGET_CWD" == "$WT_ORIG" ]]; then
+      ok "Target is the worktree's origin ($WT_ORIG) on this machine — this isn't a transfer, just an"
+      echo "  exit. No copy needed. Run:"
+      echo "      claude-teleport exit-worktree $UUID"
+      exit 0
+    fi
+
+    if [[ "$ALLOW_WORKTREE" != "1" ]]; then
+      echo
+      echo "  FIX — exit the worktree first (returns the session to${WT_ORIG:+ $WT_ORIG} the repo root), then re-run:"
+      echo "      claude-teleport exit-worktree $UUID    # drives the live session to ExitWorktree"
+      echo "      # …then re-run this copy"
+      die "refusing to relocate a worktree-bound session (override: --allow-worktree)"
+    fi
+    warn "--allow-worktree set → proceeding; the resumed session will likely re-enter the worktree."
+  fi
 fi
 
 # Encode target cwd into the dir-name claude expects. Claude's real scheme:

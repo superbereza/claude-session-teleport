@@ -15,6 +15,7 @@ Usage:
   claude-teleport preflight <project-dir> [...]      # run FIRST, on the source
   claude-teleport config-delta <target-alias>        # ~/.claude config diff vs target
   claude-teleport copy <uuid> <target-alias> [opts]  # copy the chat (+ --auto-spawn)
+  claude-teleport exit-worktree <uuid>               # drive a live session out of its git worktree
   claude-teleport rsync <src> <dst> [opts]           # move a project dir (size-gated)
   claude-teleport help
 
@@ -29,6 +30,7 @@ case "$cmd" in
   preflight)     exec bash "$ROOT/lib/preflight.sh" "$@" ;;
   config-delta)  exec bash "$ROOT/lib/config-delta.sh" "$@" ;;
   copy)          exec bash "$ROOT/lib/session-copy.sh" "$@" ;;
+  exit-worktree) exec bash "$ROOT/lib/exit-worktree.sh" "$@" ;;
   rsync)         exec bash "$ROOT/lib/rsync-project.sh" "$@" ;;
   help|-h|--help) usage ;;
   *) echo "claude-teleport: unknown subcommand '$cmd'" >&2; usage >&2; exit 2 ;;

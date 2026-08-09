@@ -16,7 +16,8 @@ plugin is enabled):
 |---|---|
 | `claude-teleport preflight <dir>…` | **Run first, on the source.** Per project: git state + important gitignored files → recommends `clone` vs `rsync`. Stops silent data loss. |
 | `claude-teleport config-delta <target>` | Compares this machine's `~/.claude` config vs the target's (over SSH) → what marketplaces/plugins/hooks/MCP may need setting up. |
-| `claude-teleport copy <uuid> <target>` | Copy the JSONL + memory dir with path rebasing. `--auto-spawn` respawns the chat in tmux on the target (remote-control ON by default, handoff briefing typed in). |
+| `claude-teleport copy <uuid> <target>` | Copy the JSONL + memory dir with path rebasing. `--auto-spawn` respawns the chat in tmux on the target (remote-control ON by default, handoff briefing typed in). Refuses a git-worktree session (see `exit-worktree`; override `--allow-worktree`). |
+| `claude-teleport exit-worktree <uuid>` | Drive a **live** session out of its Claude Code git worktree via `ExitWorktree` (back to the repo root; verified via `/proc/<pid>/cwd`). Do this before relocating a worktree-bound chat — copying the jsonl alone can't move it. |
 | `claude-teleport rsync <src> <dst>` | Move a project directory with sane excludes but **including `.git/` and `.env*`**; size gate blocks silent multi-GB transfers. |
 
 ## Which machine am I on? (read this first)
@@ -208,6 +209,18 @@ Use when: deliberate one-way move. **Plan to stop using the source.**
    > session is just its `<uuid>.jsonl` transcript plus a cwd, and `claude --resume` looks
    > for that jsonl in the **current cwd's** project dir — so placing the jsonl under a new
    > cwd's project dir and resuming from there continues the same chat elsewhere.
+
+   > ⚠️ **Git-worktree sessions are the exception.** If the chat is inside a Claude Code git
+   > worktree (`EnterWorktree`), the worktree binding is stored in the transcript's event
+   > history **and** `~/.claude.json`, and `--resume` **replays** it — the resumed session
+   > re-`chdir`s into the `.claude/worktrees/…` path, *overriding* `--target-cwd`. Copying the
+   > jsonl (or even editing it / `~/.claude.json`) does **not** move it — resume re-creates the
+   > binding. So `copy` **detects this and refuses** (current cwd under `.claude/worktrees/`),
+   > pointing you at **`claude-teleport exit-worktree <uuid>`**, which drives the *live* session
+   > to call **`ExitWorktree`** (returning it to the repo root, verified via `/proc/<pid>/cwd`);
+   > then copy from there. Same-machine and the target already *is* the worktree's origin? Then
+   > the "move" is just that exit — `exit-worktree` is the whole job. Force past the guard with
+   > `--allow-worktree` only if the identical worktree path exists at the destination.
 
 5. **(Optional) Auto-spawn the resumed session in tmux:**
    With `--auto-spawn`, the skill opens a detached `tmux` session on the
